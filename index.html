@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quản Gia Cá Nhân Pro V4</title>
+<meta name="theme-color" content="#5B5BD6">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+  <div class="app-header">
+    <div class="app-title">
+      <h1>Quản Gia Cá Nhân</h1>
+      <span>Pro V4</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="openHistoryBtn" title="Lịch sử">🕓</button>
+      <button class="btn-icon" id="openStatsBtn" title="Thống kê">📊</button>
+      <button class="btn-icon" id="openChatBtn" title="Trợ lý">💬</button>
+      <button class="btn-primary" id="openModalBtn">+ Thêm nhiệm vụ</button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Tổng</div>
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-sub">nhiệm vụ</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="stat-label">Hôm nay</div>
+      <div class="stat-value" id="statToday">0</div>
+      <div class="stat-sub">việc cần làm</div>
+    </div>
+    <div class="stat-card green-bg">
+      <div class="stat-label">Hoàn thành</div>
+      <div class="stat-value" id="statDone">0</div>
+      <div class="stat-sub">tháng này</div>
+    </div>
+  </div>
+
+  <!-- Countdown Widget -->
+  <div id="countdownWidget" style="display:none;"></div>
+
+  <div class="section-header">
+    <div class="section-title">Lịch tháng</div>
+    <div class="nav-month">
+      <button class="nav-btn" id="prevMonth">&#8592;</button>
+      <div class="month-label" id="monthLabel"></div>
+      <button class="nav-btn" id="nextMonth">&#8594;</button>
+    </div>
+  </div>
+
+  <div class="calendar-grid" id="calGrid"></div>
+</div>
+
+<!-- Modal Thêm nhiệm vụ -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Thêm nhiệm vụ mới</div>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div>
+      <label class="form-label">Tên nhiệm vụ</label>
+      <input class="form-input" type="text" id="taskInput" placeholder="Nhập nội dung...">
+    </div>
+    <div class="form-row">
+      <div>
+        <label class="form-label">Ngày</label>
+        <input class="form-input" type="date" id="taskDate">
+      </div>
+      <div>
+        <label class="form-label">Giờ</label>
+        <input class="form-input" type="time" id="taskTime">
+      </div>
+    </div>
+    <div>
+      <label class="form-label">Danh mục</label>
+      <div class="cat-selector">
+        <div class="cat-opt selected work" data-cat="work">Công việc</div>
+        <div class="cat-opt health" data-cat="health">Sức khỏe</div>
+        <div class="cat-opt finance" data-cat="finance">Chi tiêu</div>
+      </div>
+    </div>
+    <div class="repeat-row">
+      <div class="toggle" id="repeatToggle"></div>
+      <span>Lặp lại hàng ngày</span>
+    </div>
+    <button class="btn-primary" id="addBtn" style="width:100%;justify-content:center;height:40px;font-size:14px;">Thêm nhiệm vụ</button>
+  </div>
+</div>
+
+<!-- Modal Chi tiết ngày -->
+<div class="modal-overlay" id="dayModal">
+  <div class="modal-box modal-box--wide">
+    <div class="modal-header">
+      <div class="modal-title" id="dayModalTitle"></div>
+      <button class="modal-close" id="dayModalClose">✕</button>
+    </div>
+    <div id="dayTaskList"></div>
+    <button class="btn-outline" id="addTaskFromDayBtn">+ Thêm nhiệm vụ ngày này</button>
+  </div>
+</div>
+
+<!-- Modal Sửa nhiệm vụ -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Sửa nhiệm vụ</div>
+      <button class="modal-close" id="editModalClose">✕</button>
+    </div>
+    <div>
+      <label class="form-label">Tên nhiệm vụ</label>
+      <input class="form-input" type="text" id="editTaskInput" placeholder="Nhập nội dung...">
+    </div>
+    <div class="form-row">
+      <div>
+        <label class="form-label">Ngày</label>
+        <input class="form-input" type="date" id="editTaskDate">
+      </div>
+      <div>
+        <label class="form-label">Giờ</label>
+        <input class="form-input" type="time" id="editTaskTime">
+      </div>
+    </div>
+    <div>
+      <label class="form-label">Danh mục</label>
+      <div class="cat-selector" id="editCatSelector">
+        <div class="cat-opt work" data-cat="work">Công việc</div>
+        <div class="cat-opt health" data-cat="health">Sức khỏe</div>
+        <div class="cat-opt finance" data-cat="finance">Chi tiêu</div>
+      </div>
+    </div>
+    <div class="repeat-row">
+      <div class="toggle" id="editRepeatToggle"></div>
+      <span>Lặp lại hàng ngày</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-danger" id="deleteTaskBtn">Xóa</button>
+      <button class="btn-primary" id="saveEditBtn" style="flex:1;justify-content:center;height:40px;font-size:14px;">Lưu thay đổi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Thống kê -->
+<div class="modal-overlay" id="statsModal">
+  <div class="modal-box modal-box--wide">
+    <div class="modal-header">
+      <div class="modal-title">📊 Thống kê</div>
+      <button class="modal-close" id="statsModalClose">✕</button>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="stats-tabs">
+      <button class="stats-tab active" data-tab="overview">Tổng quan</button>
+      <button class="stats-tab" data-tab="chart">Biểu đồ</button>
+      <button class="stats-tab" data-tab="best">Năng suất</button>
+    </div>
+
+    <!-- Tab: Tổng quan -->
+    <div class="stats-panel active" id="tab-overview">
+      <div class="stats-grid4">
+        <div class="stat-card2"><div class="stat2-label">Tổng NV</div><div class="stat2-val" id="s-total">0</div></div>
+        <div class="stat-card2 accent"><div class="stat2-label">Hoàn thành</div><div class="stat2-val" id="s-done">0</div></div>
+        <div class="stat-card2 green-bg"><div class="stat2-label">Đang làm</div><div class="stat2-val" id="s-pending">0</div></div>
+        <div class="stat-card2 coral-bg"><div class="stat2-label">Hôm nay</div><div class="stat2-val" id="s-today">0</div></div>
+      </div>
+
+      <!-- % hoàn thành -->
+      <div class="progress-section">
+        <div class="progress-header">
+          <span class="progress-label">Tỉ lệ hoàn thành</span>
+          <span class="progress-pct" id="s-pct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-bar" id="s-bar" style="width:0%"></div>
+        </div>
+        <div class="progress-note" id="s-note"></div>
+      </div>
+
+      <!-- Phân loại -->
+      <div class="cat-breakdown">
+        <div class="breakdown-title">Theo danh mục</div>
+        <div class="breakdown-row">
+          <div class="breakdown-dot work"></div>
+          <div class="breakdown-name">Công việc</div>
+          <div class="breakdown-bar-wrap"><div class="breakdown-bar work" id="b-work"></div></div>
+          <div class="breakdown-count" id="bc-work">0</div>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-dot health"></div>
+          <div class="breakdown-name">Sức khỏe</div>
+          <div class="breakdown-bar-wrap"><div class="breakdown-bar health" id="b-health"></div></div>
+          <div class="breakdown-count" id="bc-health">0</div>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-dot finance"></div>
+          <div class="breakdown-name">Chi tiêu</div>
+          <div class="breakdown-bar-wrap"><div class="breakdown-bar finance" id="b-finance"></div></div>
+          <div class="breakdown-count" id="bc-finance">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Biểu đồ -->
+    <div class="stats-panel" id="tab-chart">
+      <div class="chart-title-row">
+        <span class="breakdown-title">Nhiệm vụ hoàn thành — 14 ngày gần nhất</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="statsChart" height="180"></canvas>
+      </div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot work"></div><span>Công việc</span></div>
+        <div class="legend-item"><div class="legend-dot health"></div><span>Sức khỏe</span></div>
+        <div class="legend-item"><div class="legend-dot finance"></div><span>Chi tiêu</span></div>
+      </div>
+    </div>
+
+    <!-- Tab: Năng suất -->
+    <div class="stats-panel" id="tab-best">
+      <div class="best-day-card" id="bestDayCard"></div>
+      <div class="streak-section">
+        <div class="streak-box" id="streakBox"></div>
+        <div class="streak-box" id="avgBox"></div>
+      </div>
+      <div class="breakdown-title" style="margin-top:1rem;">Top 5 ngày năng suất nhất</div>
+      <div id="top5List"></div>
+    </div>
+  </div>
+</div>
+
+<div class="confetti-container" id="confettiBox"></div>
+
+<!-- Modal Chat Trợ lý -->
+<div class="modal-overlay" id="chatModal">
+  <div class="modal-box modal-box--wide modal-box--chat">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="chat-avatar">✨</div>
+        <div>
+          <div class="modal-title">Trợ lý Quản Gia</div>
+          <div style="font-size:11px;color:var(--green);font-weight:500;">● Đang hoạt động</div>
+        </div>
+      </div>
+      <button class="modal-close" id="chatModalClose">✕</button>
+    </div>
+    <div id="chatMessages"></div>
+    <div class="chat-input-row">
+      <input class="form-input chat-input" id="chatInput" placeholder="Hỏi gì đó... vd: hôm nay tôi có gì?" autocomplete="off">
+      <button class="btn-primary chat-send-btn" id="chatSendBtn">↑</button>
+    </div>
+    <div class="chat-suggestions" id="chatSuggestions"></div>
+  </div>
+</div>
+
+<!-- Modal Lịch sử hành động -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal-box modal-box--wide">
+    <div class="modal-header">
+      <div class="modal-title">🕓 Lịch sử hành động</div>
+      <button class="modal-close" id="historyModalClose">✕</button>
+    </div>
+    <div id="historyList"></div>
+    <button class="btn-outline" id="clearHistoryBtn">Xóa lịch sử</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
