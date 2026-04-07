@@ -26,6 +26,7 @@
       <button class="btn-icon" id="openHistoryBtn" title="Lịch sử">🕓</button>
       <button class="btn-icon" id="openStatsBtn" title="Thống kê">📊</button>
       <button class="btn-icon" id="openChatBtn" title="Trợ lý">💬</button>
+      <button class="btn-icon" id="openGameBtn" title="Hồ sơ & Game">🎮</button>
       <button class="btn-primary" id="openModalBtn">+ Thêm nhiệm vụ</button>
     </div>
   </div>
@@ -236,6 +237,51 @@
       </div>
       <div class="breakdown-title" style="margin-top:1rem;">Top 5 ngày năng suất nhất</div>
       <div id="top5List"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Game / Hồ sơ -->
+<div class="modal-overlay" id="gameModal">
+  <div class="modal-box modal-box--wide">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="gm-level-icon" style="font-size:24px;line-height:1;"></div>
+        <div>
+          <div class="modal-title" id="gm-level-name"></div>
+          <div style="font-size:11px;color:var(--text3);" id="gm-xp"></div>
+        </div>
+      </div>
+      <button class="modal-close" id="gameModalClose">✕</button>
+    </div>
+
+    <!-- XP bar -->
+    <div style="height:6px;background:var(--surface2);border-radius:6px;overflow:hidden;margin-bottom:12px;">
+      <div id="gm-xpbar" style="height:100%;background:var(--accent);border-radius:6px;transition:width 0.6s ease;width:0%;"></div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="stats-grid4" style="margin-bottom:14px;">
+      <div class="stat-card2 accent"><div class="stat2-label">Streak</div><div class="stat2-val" id="gm-streak">0</div></div>
+      <div class="stat-card2 green-bg"><div class="stat2-label">Đã xong</div><div class="stat2-val" id="gm-done">0</div></div>
+      <div class="stat-card2"><div class="stat2-label">Hoàn hảo</div><div class="stat2-val" id="gm-perfect">0</div></div>
+      <div class="stat-card2" style="cursor:pointer;" id="gmResetBtn"><div class="stat2-label">XP</div><div class="stat2-val" style="font-size:14px;color:var(--accent);">Reset?</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="stats-tabs" style="margin-bottom:12px;">
+      <button class="stats-tab active" data-gtab="themes">🎨 Theme</button>
+      <button class="stats-tab" data-gtab="achievements">🏆 Huy hiệu</button>
+    </div>
+
+    <!-- Theme grid -->
+    <div id="gtab-themes" class="stats-panel active">
+      <div id="gmThemeGrid" class="gm-theme-grid"></div>
+    </div>
+
+    <!-- Achievements grid -->
+    <div id="gtab-achievements" class="stats-panel">
+      <div id="gmAchGrid" class="gm-ach-grid"></div>
     </div>
   </div>
 </div>

@@ -9,6 +9,44 @@ const CAT_ICON  = { work: '💼', health: '💪', finance: '💰' };
 const CAT_LABEL = { work: 'Công việc', health: 'Sức khỏe', finance: 'Chi tiêu' };
 const CONFETTI_COLORS = ['#5B5BD6','#1D9E75','#D85A30','#BA7517','#D4537E'];
 
+// ===== Gamification Config =====
+const XP_PER_TASK   = 10;
+const XP_BONUS_TIME = 5;   // bonus if done before scheduled time
+const XP_BONUS_CAT  = { work: 0, health: 5, finance: 3 };
+const LEVELS = [
+  { level:1,  name:'Tập sự',       minXP:0,    icon:'🌱' },
+  { level:2,  name:'Chăm chỉ',     minXP:50,   icon:'⚡' },
+  { level:3,  name:'Tích cực',     minXP:150,  icon:'🔥' },
+  { level:4,  name:'Chuyên nghiệp',minXP:300,  icon:'💎' },
+  { level:5,  name:'Siêu năng suất',minXP:600, icon:'🚀' },
+  { level:6,  name:'Huyền thoại',  minXP:1000, icon:'👑' },
+];
+const ACHIEVEMENTS = [
+  { id:'first',     icon:'🎯', name:'Bước đầu tiên',   desc:'Hoàn thành task đầu tiên',         check: g => g.totalDone >= 1 },
+  { id:'streak3',   icon:'🔥', name:'Bốc lửa',         desc:'Streak 3 ngày liên tiếp',          check: g => g.streak >= 3 },
+  { id:'streak7',   icon:'💥', name:'Tuần lễ thần thánh',desc:'Streak 7 ngày liên tiếp',        check: g => g.streak >= 7 },
+  { id:'streak30',  icon:'🌟', name:'Tháng vàng',       desc:'Streak 30 ngày',                  check: g => g.streak >= 30 },
+  { id:'done10',    icon:'⚡', name:'Máy làm việc',     desc:'Hoàn thành 10 task',              check: g => g.totalDone >= 10 },
+  { id:'done50',    icon:'💪', name:'Chiến binh',       desc:'Hoàn thành 50 task',              check: g => g.totalDone >= 50 },
+  { id:'done100',   icon:'🏆', name:'Trăm task',        desc:'Hoàn thành 100 task',             check: g => g.totalDone >= 100 },
+  { id:'health5',   icon:'🥗', name:'Lối sống lành mạnh',desc:'Xong 5 task sức khỏe',          check: g => g.catDone.health >= 5 },
+  { id:'level5',    icon:'🚀', name:'Lên đỉnh',         desc:'Đạt Level 5',                     check: g => g.level >= 5 },
+  { id:'allday',    icon:'🎪', name:'Ngày hoàn hảo',    desc:'Xong tất cả task trong 1 ngày',   check: g => g.perfectDays >= 1 },
+];
+const THEMES = [
+  { id:'default', name:'Mặc định',  icon:'🔵', unlock:'Mặc định',         unlockCond: g => true },
+  { id:'forest',  name:'Rừng xanh', icon:'🌿', unlock:'Streak 3 ngày',    unlockCond: g => g.streak >= 3,
+    vars: {'--accent':'#1D9E75','--accent-light':'#E1F5EE','--accent-mid':'#5DCAA5'} },
+  { id:'sunset',  name:'Hoàng hôn', icon:'🌅', unlock:'Hoàn thành 10 task',unlockCond: g => g.totalDone >= 10,
+    vars: {'--accent':'#D85A30','--accent-light':'#FAECE7','--accent-mid':'#F0997B'} },
+  { id:'galaxy',  name:'Thiên hà',  icon:'🌌', unlock:'Level 4',           unlockCond: g => g.level >= 4,
+    vars: {'--accent':'#7F77DD','--accent-light':'#EEEDFE','--accent-mid':'#AFA9EC'} },
+  { id:'gold',    name:'Hoàng kim', icon:'👑', unlock:'Streak 7 ngày',     unlockCond: g => g.streak >= 7,
+    vars: {'--accent':'#BA7517','--accent-light':'#FAEEDA','--accent-mid':'#EF9F27'} },
+  { id:'cherry',  name:'Hoa anh đào',icon:'🌸',unlock:'Level 5',           unlockCond: g => g.level >= 5,
+    vars: {'--accent':'#D4537E','--accent-light':'#FBEAF0','--accent-mid':'#ED93B1'} },
+];
+
 // ===== State =====
 let tasks = JSON.parse(localStorage.getItem('tasks_v4') || '[]');
 let selectedCat  = 'work';
@@ -17,6 +55,11 @@ let repeatOn     = false;
 let editRepeatOn = false;
 let editingIdx   = null;
 let activeDayStr = null;
+
+// ===== Game State =====
+const DEFAULT_GAME = { xp:0, level:1, streak:0, lastDoneDate:'', totalDone:0, catDone:{work:0,health:0,finance:0}, achievements:[], perfectDays:0, activeTheme:'default' };
+let game = { ...DEFAULT_GAME, ...JSON.parse(localStorage.getItem('gameState_v4') || '{}') };
+if (!game.catDone) game.catDone = {work:0,health:0,finance:0};
 
 let curYear, curMonth;
 const today = new Date();
@@ -143,7 +186,7 @@ function renderDayTaskList() {
       const snap2 = snapshotTasks();
       tasks[i].done = !tasks[i].done;
       const action = tasks[i].done ? 'done' : 'undone';
-      if (tasks[i].done) spawnConfetti();
+      if (tasks[i].done) { spawnConfetti(); onTaskDone(tasks[i]); }
       save();
       pushHistory(action, tasks[i].text, snap2);
       renderDayTaskList(); updateStats(); renderCountdownWidget();
@@ -248,14 +291,16 @@ function deleteTask() {
 }
 
 // ===== Confetti =====
-function spawnConfetti() {
+function spawnConfetti(count) {
   const box = document.getElementById('confettiBox');
-  for (let i = 0; i < 18; i++) {
+  const n = count || 18;
+  for (let i = 0; i < n; i++) {
     const piece = document.createElement('div');
     const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
-    piece.style.cssText = `position:absolute;width:7px;height:7px;border-radius:2px;left:${Math.random()*100}%;top:${Math.random()*40}%;background:${color};animation:confettifall 0.9s ease-out ${Math.random()*0.3}s forwards;`;
+    const size  = 5 + Math.random() * 6;
+    piece.style.cssText = `position:absolute;width:${size}px;height:${size}px;border-radius:${Math.random()>0.5?'50%':'2px'};left:${Math.random()*100}%;top:${Math.random()*30}%;background:${color};animation:confettifall ${0.7+Math.random()*0.6}s ease-out ${Math.random()*0.4}s forwards;`;
     box.appendChild(piece);
-    setTimeout(() => piece.remove(), 1300);
+    setTimeout(() => piece.remove(), 1400);
   }
 }
 
@@ -887,6 +932,203 @@ function checkNotificationsWithReschedule() {
 // Replace the interval with the enhanced version
 setInterval(checkNotificationsWithReschedule, 30 * 1000);
 
+// ===== Game Engine =====
+function saveGame() { localStorage.setItem('gameState_v4', JSON.stringify(game)); }
+
+function getLevelInfo(xp) {
+  let cur = LEVELS[0], next = LEVELS[1];
+  for (let i = LEVELS.length-1; i >= 0; i--) {
+    if (xp >= LEVELS[i].minXP) { cur = LEVELS[i]; next = LEVELS[i+1]||null; break; }
+  }
+  return { cur, next };
+}
+
+function calcXPForTask(task) {
+  let xp = XP_PER_TASK + (XP_BONUS_CAT[task.category] || 0);
+  if (task.time) {
+    const now = new Date();
+    const [h,m] = task.time.split(':').map(Number);
+    const taskMin = h*60+m, nowMin = now.getHours()*60+now.getMinutes();
+    if (nowMin <= taskMin) xp += XP_BONUS_TIME; // done on time or early
+  }
+  return xp;
+}
+
+function updateStreak() {
+  const todayStr = toDateStr(today);
+  if (game.lastDoneDate === todayStr) return; // already counted today
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+  const yesterdayStr = toDateStr(yesterday);
+  if (game.lastDoneDate === yesterdayStr || game.lastDoneDate === '') {
+    game.streak = (game.lastDoneDate === '') ? 1 : game.streak + 1;
+  } else {
+    game.streak = 1; // streak broken
+  }
+  game.lastDoneDate = todayStr;
+}
+
+function checkPerfectDay() {
+  const todayStr = toDateStr(today);
+  const todayTasks = getEffectiveTasks(todayStr);
+  if (todayTasks.length > 0 && todayTasks.every(t => t.done)) {
+    game.perfectDays = (game.perfectDays || 0) + 1;
+  }
+}
+
+function checkAchievements() {
+  const newUnlocks = [];
+  ACHIEVEMENTS.forEach(a => {
+    if (!game.achievements.includes(a.id) && a.check(game)) {
+      game.achievements.push(a.id);
+      newUnlocks.push(a);
+    }
+  });
+  return newUnlocks;
+}
+
+function onTaskDone(task) {
+  const xpGained = calcXPForTask(task);
+  const oldLevel = getLevelInfo(game.xp).cur.level;
+  game.xp        += xpGained;
+  game.totalDone += 1;
+  game.catDone[task.category] = (game.catDone[task.category]||0) + 1;
+  updateStreak();
+  checkPerfectDay();
+  const newLevelInfo = getLevelInfo(game.xp);
+  const leveledUp    = newLevelInfo.cur.level > oldLevel;
+  const newUnlocks   = checkAchievements();
+  // Check new theme unlocks
+  const newThemes = THEMES.filter(th => th.id !== 'default' && !game.achievements.includes('theme:'+th.id) && th.unlockCond(game));
+  newThemes.forEach(th => game.achievements.push('theme:'+th.id));
+  saveGame();
+  showCelebration({ xpGained, leveledUp, newLevel: newLevelInfo.cur, newUnlocks, newThemes });
+  updateXPBar();
+}
+
+// ===== XP Bar in header =====
+function renderXPBar() {
+  const existing = document.getElementById('xpBarWrap');
+  if (existing) existing.remove();
+  const { cur, next } = getLevelInfo(game.xp);
+  const pct = next ? Math.round(((game.xp - cur.minXP) / (next.minXP - cur.minXP)) * 100) : 100;
+  const wrap = document.createElement('div');
+  wrap.id = 'xpBarWrap';
+  wrap.innerHTML = `
+    <div id="xpBarInner">
+      <div id="xpLevelBadge" title="Level ${cur.level}: ${cur.name}">${cur.icon} Lv.${cur.level}</div>
+      <div id="xpTrack"><div id="xpFill" style="width:${pct}%"></div></div>
+      <div id="xpText">${game.xp} XP</div>
+      <div id="streakBadge" title="Streak ${game.streak} ngày">🔥${game.streak}</div>
+    </div>
+  `;
+  wrap.querySelector('#xpLevelBadge').addEventListener('click', openGameModal);
+  wrap.querySelector('#streakBadge').addEventListener('click', openGameModal);
+  document.querySelector('.app-header').insertAdjacentElement('afterend', wrap);
+}
+
+function updateXPBar() { renderXPBar(); }
+
+// ===== Celebration Popup =====
+function showCelebration({ xpGained, leveledUp, newLevel, newUnlocks, newThemes }) {
+  spawnConfetti(leveledUp ? 60 : 20);
+
+  const popup = document.createElement('div');
+  popup.id = 'celebPopup';
+
+  let html = `<div class="celeb-xp">+${xpGained} XP ✨</div>`;
+  if (leveledUp) {
+    html += `<div class="celeb-level">${newLevel.icon} Lên Level ${newLevel.level}!<br><span>${newLevel.name}</span></div>`;
+  }
+  if (newUnlocks.length) {
+    newUnlocks.forEach(a => {
+      html += `<div class="celeb-badge">${a.icon} Huy hiệu: <b>${a.name}</b></div>`;
+    });
+  }
+  if (newThemes.length) {
+    newThemes.forEach(th => {
+      html += `<div class="celeb-badge">${th.icon} Mở khóa theme: <b>${th.name}</b></div>`;
+    });
+  }
+  if (game.streak > 1) {
+    html += `<div class="celeb-streak">🔥 Streak ${game.streak} ngày!</div>`;
+  }
+
+  popup.innerHTML = html;
+  document.body.appendChild(popup);
+  setTimeout(() => { popup.classList.add('celeb-hide'); setTimeout(()=>popup.remove(), 400); }, leveledUp ? 3000 : 1800);
+}
+
+// ===== Game Modal (Profile + Themes + Achievements) =====
+function openGameModal() {
+  renderGameModal();
+  document.getElementById('gameModal').classList.add('open');
+}
+function closeGameModal() {
+  document.getElementById('gameModal').classList.remove('open');
+}
+
+function renderGameModal() {
+  const { cur, next } = getLevelInfo(game.xp);
+  const pct = next ? Math.round(((game.xp - cur.minXP)/(next.minXP - cur.minXP))*100) : 100;
+  const xpToNext = next ? (next.minXP - game.xp) : 0;
+
+  // Profile section
+  document.getElementById('gm-level-icon').textContent = cur.icon;
+  document.getElementById('gm-level-name').textContent = `Level ${cur.level} · ${cur.name}`;
+  document.getElementById('gm-xp').textContent         = `${game.xp} XP${next ? ` · còn ${xpToNext} XP lên Lv.${next.level}` : ' · MAX'}`;
+  document.getElementById('gm-streak').textContent     = game.streak;
+  document.getElementById('gm-done').textContent       = game.totalDone;
+  document.getElementById('gm-perfect').textContent    = game.perfectDays || 0;
+  document.getElementById('gm-xpbar').style.width      = pct + '%';
+
+  // Themes
+  const themeGrid = document.getElementById('gmThemeGrid');
+  themeGrid.innerHTML = '';
+  THEMES.forEach(th => {
+    const unlocked = th.unlockCond(game);
+    const active   = game.activeTheme === th.id;
+    const tile = document.createElement('div');
+    tile.className = 'gm-theme-tile' + (active ? ' active' : '') + (unlocked ? '' : ' locked');
+    tile.innerHTML = `
+      <div class="gm-theme-icon">${th.icon}</div>
+      <div class="gm-theme-name">${th.name}</div>
+      <div class="gm-theme-lock">${unlocked ? (active ? '✓ Đang dùng' : 'Chọn') : th.unlock}</div>
+    `;
+    if (unlocked && !active) tile.addEventListener('click', () => { applyTheme(th.id); renderGameModal(); });
+    themeGrid.appendChild(tile);
+  });
+
+  // Achievements
+  const achGrid = document.getElementById('gmAchGrid');
+  achGrid.innerHTML = '';
+  ACHIEVEMENTS.forEach(a => {
+    const unlocked = game.achievements.includes(a.id);
+    const tile = document.createElement('div');
+    tile.className = 'gm-ach-tile' + (unlocked ? '' : ' locked');
+    tile.innerHTML = `
+      <div class="gm-ach-icon">${a.icon}</div>
+      <div class="gm-ach-name">${a.name}</div>
+      <div class="gm-ach-desc">${a.desc}</div>
+    `;
+    achGrid.appendChild(tile);
+  });
+}
+
+function applyTheme(themeId) {
+  game.activeTheme = themeId;
+  saveGame();
+  const theme = THEMES.find(t => t.id === themeId);
+  const root  = document.documentElement;
+  // Reset to default first
+  THEMES.forEach(t => { if (t.vars) Object.keys(t.vars).forEach(k => root.style.removeProperty(k)); });
+  if (theme && theme.vars) {
+    Object.entries(theme.vars).forEach(([k,v]) => root.style.setProperty(k, v));
+  }
+}
+
+// Apply saved theme on load
+applyTheme(game.activeTheme || 'default');
+
 // ===== Undo / Action History =====
 const MAX_HISTORY = 30;
 let actionHistory = JSON.parse(localStorage.getItem('actionHistory_v4') || '[]');
@@ -1404,3 +1646,28 @@ function startCountdown() {
 // ===== Init =====
 renderCalendar();
 startCountdown();
+renderXPBar();
+
+// Game modal events
+document.getElementById('openGameBtn').addEventListener('click', openGameModal);
+document.getElementById('gameModalClose').addEventListener('click', closeGameModal);
+document.getElementById('gameModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('gameModal')) closeGameModal();
+});
+document.getElementById('gmResetBtn').addEventListener('click', () => {
+  if (confirm('Reset toàn bộ XP và tiến trình game?')) {
+    game = { ...DEFAULT_GAME };
+    saveGame();
+    applyTheme('default');
+    renderXPBar();
+    renderGameModal();
+  }
+});
+document.querySelectorAll('[data-gtab]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-gtab]').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#gameModal .stats-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('gtab-' + tab.dataset.gtab).classList.add('active');
+  });
+});
