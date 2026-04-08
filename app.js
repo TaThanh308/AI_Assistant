@@ -175,7 +175,19 @@ function renderDayTaskList() {
     item.innerHTML = `
       <div class="task-check ${t.done ? 'checked' : ''}" data-idx="${realIdx}">${t.done ? '✓' : ''}</div>
       ${t.image ? `<img class="task-thumb" src="${t.image}" alt="" data-src="${t.image}">` : `<span style="font-size:20px;flex-shrink:0;">${t.icon || CAT_ICON[t.category]}</span>`}
-      <div class="task-text">${t.text}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="task-text">${t.text}</div>
+        ${(t.subtasks && t.subtasks.length) ? (() => {
+          const total = t.subtasks.length;
+          const done  = t.subtasks.filter(s => s.done).length;
+          const pct   = Math.round(done/total*100);
+          return `<div class="subtask-progress-row" style="margin-top:5px;">
+            <span class="subtask-progress-label">${done}/${total}</span>
+            <div class="subtask-progress-track"><div class="subtask-progress-fill" style="width:${pct}%"></div></div>
+            <span class="subtask-progress-pct">${pct}%</span>
+          </div>`;
+        })() : ''}
+      </div>
       <div class="task-meta">
         ${t.time ? `<span class="task-time">${t.time}</span>` : ''}
         <span class="cat-badge ${t.category}">${CAT_LABEL[t.category]}</span>
@@ -187,6 +199,44 @@ function renderDayTaskList() {
       item.querySelector('.task-thumb').addEventListener('click', e => {
         e.stopPropagation();
         openLightbox(e.currentTarget.dataset.src);
+      });
+    }
+    // Expand subtasks on click
+    if (t.subtasks && t.subtasks.length) {
+      const subtaskSection = document.createElement('div');
+      subtaskSection.className = 'subtask-section';
+      subtaskSection.style.display = 'none';
+      t.subtasks.forEach((st, si) => {
+        const stItem = document.createElement('div');
+        stItem.className = 'subtask-day-item';
+        stItem.innerHTML = `
+          <div class="subtask-day-check ${st.done ? 'checked' : ''}" data-ridx="${realIdx}" data-si="${si}">${st.done ? '✓' : ''}</div>
+          <div class="subtask-day-text ${st.done ? 'done' : ''}">${escHtml(st.text)}</div>
+        `;
+        stItem.querySelector('.subtask-day-check').addEventListener('click', e => {
+          e.stopPropagation();
+          const ri = parseInt(e.currentTarget.dataset.ridx);
+          const si2 = parseInt(e.currentTarget.dataset.si);
+          tasks[ri].subtasks[si2].done = !tasks[ri].subtasks[si2].done;
+          // Auto-complete parent task if all subtasks done
+          if (tasks[ri].subtasks.every(s => s.done) && !tasks[ri].done) {
+            tasks[ri].done = true;
+            spawnConfetti(); onTaskDone(tasks[ri]);
+          }
+          save(); renderDayTaskList(); updateStats();
+        });
+        subtaskSection.appendChild(stItem);
+      });
+      item.appendChild(subtaskSection);
+
+      // Toggle expand on item click (not on buttons)
+      item.addEventListener('click', e => {
+        if (e.target.classList.contains('task-check') ||
+            e.target.classList.contains('task-edit-btn') ||
+            e.target.classList.contains('task-thumb') ||
+            e.target.classList.contains('subtask-day-check')) return;
+        const isOpen = subtaskSection.style.display !== 'none';
+        subtaskSection.style.display = isOpen ? 'none' : 'block';
       });
     }
     item.querySelector('.task-check').addEventListener('click', e => {
@@ -228,7 +278,12 @@ function resetAddForm(dateStr) {
   document.getElementById('taskImageInput').value = '';
   document.getElementById('imgPreview').style.display = 'none';
   document.getElementById('imgUploadPlaceholder').style.display = 'flex';
-  document.getElementById('imgRemoveBtn').style.display = 'none';
+  // Reset sub-tasks
+  addSubtasks = [];
+  document.getElementById('subtaskPanel').style.display = 'none';
+  document.getElementById('subtaskList').innerHTML = '';
+  document.getElementById('subtaskLoading').style.display = 'none';
+  document.getElementById('aiSubtaskBtn').classList.remove('loading');
 }
 function openModal() {
   resetAddForm(toDateStr(today));
@@ -249,7 +304,7 @@ function addTask() {
   const date = document.getElementById('taskDate').value;
   if (!text || !date) { document.getElementById('taskInput').focus(); return; }
   const snap = snapshotTasks();
-  tasks.push({ id: Date.now(), text, date, time: document.getElementById('taskTime').value, category: selectedCat, repeat: repeatOn, done: false, icon: selectedIcon, image: selectedImageB64 || null });
+  tasks.push({ id: Date.now(), text, date, time: document.getElementById('taskTime').value, category: selectedCat, repeat: repeatOn, done: false, icon: selectedIcon, image: selectedImageB64 || null, subtasks: addSubtasks.length ? JSON.parse(JSON.stringify(addSubtasks)) : [] });
   save();
   pushHistory('add', text, snap);
   closeAddModal();
@@ -259,6 +314,7 @@ function addTask() {
     renderCalendar();
   }
   renderCountdownWidget();
+  refreshTimelineIfOpen();
 }
 
 // ===== Edit Modal =====
@@ -294,6 +350,19 @@ function openEditModal(idx) {
     editPlaceholder.style.display = 'flex';
     editRemoveBtn.style.display = 'none';
   }
+  // Load sub-tasks
+  editSubtasks = t.subtasks ? JSON.parse(JSON.stringify(t.subtasks)) : [];
+  const editSubtaskPanel = document.getElementById('editSubtaskPanel');
+  const editSubtaskListEl = document.getElementById('editSubtaskList');
+  if (editSubtasks.length) {
+    editSubtaskPanel.style.display = 'flex';
+    renderSubtaskList(editSubtaskListEl, editSubtasks, () => renderSubtaskList(editSubtaskListEl, editSubtasks, () => {}));
+  } else {
+    editSubtaskPanel.style.display = 'none';
+    editSubtaskListEl.innerHTML = '';
+  }
+  document.getElementById('editSubtaskLoading').style.display = 'none';
+  document.getElementById('editAiSubtaskBtn').classList.remove('loading');
   document.getElementById('editModal').classList.add('open');
   setTimeout(() => document.getElementById('editTaskInput').focus(), 200);
 }
@@ -307,13 +376,14 @@ function saveEdit() {
   const date = document.getElementById('editTaskDate').value;
   if (!text || !date) { document.getElementById('editTaskInput').focus(); return; }
   const snapEdit = snapshotTasks();
-  tasks[editingIdx] = { ...tasks[editingIdx], text, date, time: document.getElementById('editTaskTime').value, category: editCat, repeat: editRepeatOn, icon: selectedEditIcon, image: selectedEditImageB64 !== undefined ? selectedEditImageB64 : tasks[editingIdx].image };
+  tasks[editingIdx] = { ...tasks[editingIdx], text, date, time: document.getElementById('editTaskTime').value, category: editCat, repeat: editRepeatOn, icon: selectedEditIcon, image: selectedEditImageB64 !== undefined ? selectedEditImageB64 : tasks[editingIdx].image, subtasks: JSON.parse(JSON.stringify(editSubtasks)) };
   save();
   pushHistory('edit', text, snapEdit);
   closeEditModal();
   renderDayTaskList();
   updateStats();
   renderCountdownWidget();
+  refreshTimelineIfOpen();
 }
 function deleteTask() {
   if (editingIdx === null) return;
@@ -321,12 +391,13 @@ function deleteTask() {
   const label   = tasks[editingIdx].text;
   tasks.splice(editingIdx, 1);
   save();
-  const hIdx = actionHistory.length; // will be index 0 after push
+  const hIdx = actionHistory.length;
   pushHistory('delete', label, snapDel);
   closeEditModal();
   renderDayTaskList();
   updateStats();
   renderCountdownWidget();
+  refreshTimelineIfOpen();
   showUndoToast(label, 0);
 }
 
@@ -1169,6 +1240,162 @@ function applyTheme(themeId) {
 // Apply saved theme on load
 applyTheme(game.activeTheme || 'default');
 
+// ===== AI Sub-task System =====
+// In-memory subtask state for add/edit modals
+let addSubtasks  = [];   // [{id, text, done}]
+let editSubtasks = [];
+
+function makeSubtaskId() { return 'st_' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
+
+// Call Anthropic API to generate sub-tasks
+async function generateSubtasks(taskText, category) {
+  const catContext = { work:'công việc văn phòng', health:'sức khỏe/thể chất', finance:'tài chính/chi tiêu' }[category] || 'công việc';
+  const prompt = `Bạn là trợ lý năng suất. Nhiệm vụ: "${taskText}" (danh mục: ${catContext}).
+Hãy tạo 4-6 sub-task cụ thể, thực tế để hoàn thành nhiệm vụ này.
+Trả về JSON thuần (không markdown), đúng format:
+{"subtasks": ["sub-task 1", "sub-task 2", "sub-task 3", "sub-task 4"]}
+Sub-task phải ngắn gọn (5-8 từ), hành động rõ ràng, theo thứ tự logic.`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 400,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!response.ok) throw new Error('API error ' + response.status);
+  const data = await response.json();
+  const raw  = data.content.map(b => b.text || '').join('').trim();
+  const clean = raw.replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(clean);
+  return (parsed.subtasks || []).map(text => ({ id: makeSubtaskId(), text, done: false }));
+}
+
+// Render subtask list inside a container
+function renderSubtaskList(listEl, subtasks, onChange) {
+  listEl.innerHTML = '';
+  subtasks.forEach((st, i) => {
+    const item = document.createElement('div');
+    item.className = 'subtask-item';
+    item.style.animationDelay = (i * 0.05) + 's';
+    item.innerHTML = `
+      <div class="subtask-check ${st.done ? 'checked' : ''}" data-id="${st.id}">${st.done ? '✓' : ''}</div>
+      <input class="subtask-text-input ${st.done ? 'done-text' : ''}" value="${escHtml(st.text)}" data-id="${st.id}" placeholder="Tên sub-task...">
+      <button class="subtask-del-btn" data-id="${st.id}">✕</button>
+    `;
+    // Toggle done
+    item.querySelector('.subtask-check').addEventListener('click', () => {
+      st.done = !st.done;
+      onChange();
+    });
+    // Edit text
+    item.querySelector('.subtask-text-input').addEventListener('input', e => {
+      st.text = e.target.value;
+    });
+    // Delete
+    item.querySelector('.subtask-del-btn').addEventListener('click', () => {
+      const idx = subtasks.indexOf(st);
+      if (idx !== -1) subtasks.splice(idx, 1);
+      onChange();
+    });
+    listEl.appendChild(item);
+  });
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function addManualSubtask(subtasks, listEl, onChange) {
+  subtasks.push({ id: makeSubtaskId(), text: '', done: false });
+  onChange();
+  // Focus last input after render
+  setTimeout(() => {
+    const inputs = listEl.querySelectorAll('.subtask-text-input');
+    if (inputs.length) inputs[inputs.length-1].focus();
+  }, 60);
+}
+
+// Wire up ADD modal AI button
+async function triggerAddSubtasks() {
+  const text = document.getElementById('taskInput').value.trim();
+  if (!text) { document.getElementById('taskInput').focus(); return; }
+  const panel   = document.getElementById('subtaskPanel');
+  const loading = document.getElementById('subtaskLoading');
+  const listEl  = document.getElementById('subtaskList');
+  const btn     = document.getElementById('aiSubtaskBtn');
+
+  panel.style.display = 'flex';
+  loading.style.display = 'flex';
+  listEl.innerHTML = '';
+  btn.classList.add('loading');
+
+  try {
+    addSubtasks = await generateSubtasks(text, selectedCat);
+  } catch(e) {
+    addSubtasks = [
+      { id: makeSubtaskId(), text: 'Chuẩn bị tài liệu', done: false },
+      { id: makeSubtaskId(), text: 'Thực hiện nhiệm vụ',  done: false },
+      { id: makeSubtaskId(), text: 'Kiểm tra kết quả',    done: false },
+    ];
+  }
+  loading.style.display = 'none';
+  btn.classList.remove('loading');
+  renderSubtaskList(listEl, addSubtasks, () => renderSubtaskList(listEl, addSubtasks, () => {}));
+}
+
+document.getElementById('aiSubtaskBtn').addEventListener('click', triggerAddSubtasks);
+document.getElementById('subtaskRegenBtn').addEventListener('click', triggerAddSubtasks);
+document.getElementById('subtaskAddManualBtn').addEventListener('click', () => {
+  document.getElementById('subtaskPanel').style.display = 'flex';
+  addManualSubtask(addSubtasks, document.getElementById('subtaskList'),
+    () => renderSubtaskList(document.getElementById('subtaskList'), addSubtasks, () => {}));
+});
+
+// Wire up EDIT modal AI button
+async function triggerEditSubtasks() {
+  const text  = document.getElementById('editTaskInput').value.trim();
+  if (!text) { document.getElementById('editTaskInput').focus(); return; }
+  const panel   = document.getElementById('editSubtaskPanel');
+  const loading = document.getElementById('editSubtaskLoading');
+  const listEl  = document.getElementById('editSubtaskList');
+  const btn     = document.getElementById('editAiSubtaskBtn');
+
+  panel.style.display = 'flex';
+  loading.style.display = 'flex';
+  listEl.innerHTML = '';
+  btn.classList.add('loading');
+
+  try {
+    const generated = await generateSubtasks(text, editCat);
+    // Merge: keep existing, append new ones not already present
+    const existingTexts = editSubtasks.map(s => s.text.toLowerCase());
+    generated.forEach(s => {
+      if (!existingTexts.includes(s.text.toLowerCase())) editSubtasks.push(s);
+    });
+  } catch(e) {
+    if (!editSubtasks.length) {
+      editSubtasks = [{ id: makeSubtaskId(), text: 'Bước 1', done: false }];
+    }
+  }
+  loading.style.display = 'none';
+  btn.classList.remove('loading');
+  renderSubtaskList(listEl, editSubtasks, () => renderSubtaskList(listEl, editSubtasks, () => {}));
+}
+
+document.getElementById('editAiSubtaskBtn').addEventListener('click', triggerEditSubtasks);
+document.getElementById('editSubtaskRegenBtn').addEventListener('click', async () => {
+  editSubtasks = [];
+  await triggerEditSubtasks();
+});
+document.getElementById('editSubtaskAddManualBtn').addEventListener('click', () => {
+  document.getElementById('editSubtaskPanel').style.display = 'flex';
+  addManualSubtask(editSubtasks, document.getElementById('editSubtaskList'),
+    () => renderSubtaskList(document.getElementById('editSubtaskList'), editSubtasks, () => {}));
+});
+
 // ===== Icon & Image System =====
 const EMOJI_SETS = [
   { label: 'Công việc', emojis: ['💼','📋','📊','📝','💻','📞','🤝','📌','🎯','📈','🖥','✉️','📅','🏢','⚙️','🔧'] },
@@ -1813,6 +2040,378 @@ function startCountdown() {
   if (countdownInterval) clearInterval(countdownInterval);
   renderCountdownWidget();
   countdownInterval = setInterval(renderCountdownWidget, 1000);
+}
+
+// ===== Timeline =====
+const TL_HOUR_START  = 0;   // 0:00
+const TL_HOUR_END    = 24;  // 24:00
+const TL_PX_PER_HOUR_BASE = 64; // px per hour at zoom 1×
+const TL_TASK_DURATION_DEFAULT = 60; // minutes default duration
+
+let tlDate     = toDateStr(today);
+let tlZoom     = 1;          // 0.75 / 1 / 1.5 / 2 / 3
+let tlNowTimer = null;
+let tlDragState = null;      // active drag info
+
+const TL_ZOOMS = [0.75, 1, 1.5, 2, 3];
+
+function tlPxPerHour() { return TL_PX_PER_HOUR_BASE * tlZoom; }
+function tlTotalH()    { return (TL_HOUR_END - TL_HOUR_START) * tlPxPerHour(); }
+
+function minToY(min)   { return (min / 60) * tlPxPerHour(); }
+function yToMin(y)     { return Math.round((y / tlPxPerHour()) * 60); }
+function snapMin(min)  { return Math.round(min / 15) * 15; } // snap to 15min
+
+function minToTimeStr(min) {
+  const h = Math.floor(min / 60) % 24;
+  const m = min % 60;
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+
+function openTimelineModal() {
+  tlDate = toDateStr(today);
+  renderTimeline();
+  document.getElementById('timelineModal').classList.add('open');
+  // Scroll to current time - 2 hours
+  setTimeout(() => {
+    const now   = new Date();
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    const scrollTo = Math.max(0, minToY(nowMin) - 120);
+    document.getElementById('tlScrollWrap').scrollTop = scrollTo;
+  }, 80);
+}
+function closeTimelineModal() {
+  document.getElementById('timelineModal').classList.remove('open');
+  if (tlNowTimer) { clearInterval(tlNowTimer); tlNowTimer = null; }
+}
+
+function renderTimeline() {
+  updateTlDateLabel();
+  buildTlGrid();
+  renderTlTasks();
+  updateTlNowLine();
+  if (tlNowTimer) clearInterval(tlNowTimer);
+  // Update now-line every 30s when modal open
+  tlNowTimer = setInterval(() => {
+    if (document.getElementById('timelineModal').classList.contains('open')) {
+      updateTlNowLine();
+    }
+  }, 30000);
+}
+
+function updateTlDateLabel() {
+  const d = new Date(tlDate + 'T00:00:00');
+  const todayStr = toDateStr(today);
+  const prefix = tlDate === todayStr ? 'Hôm nay, ' : '';
+  document.getElementById('tlDateLabel').textContent =
+    prefix + DAYS_FULL_VI[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth()+1);
+  document.getElementById('tlZoomLabel').textContent = tlZoom + '×';
+}
+
+function buildTlGrid() {
+  const hoursCol = document.getElementById('tlHoursCol');
+  const lanes    = document.getElementById('tlLanes');
+  const totalH   = tlTotalH();
+  const pph      = tlPxPerHour();
+
+  hoursCol.innerHTML = '';
+  hoursCol.style.height = totalH + 'px';
+
+  // Remove old grid lines (not task blocks)
+  lanes.style.height = totalH + 'px';
+  lanes.querySelectorAll('.tl-hour-line, .tl-click-zone').forEach(el => el.remove());
+
+  for (let h = TL_HOUR_START; h <= TL_HOUR_END; h++) {
+    const y = (h - TL_HOUR_START) * pph;
+
+    // Hour label
+    if (h < TL_HOUR_END) {
+      const lbl = document.createElement('div');
+      lbl.className = 'tl-hour-label';
+      lbl.style.top = y + 'px';
+      lbl.textContent = String(h).padStart(2,'0') + ':00';
+      hoursCol.appendChild(lbl);
+    }
+
+    // Major hour line
+    const line = document.createElement('div');
+    line.className = 'tl-hour-line major';
+    line.style.top = y + 'px';
+    lanes.appendChild(line);
+
+    // Half-hour dashed line
+    if (h < TL_HOUR_END && pph >= 48) {
+      const half = document.createElement('div');
+      half.className = 'tl-hour-line half';
+      half.style.top = (y + pph/2) + 'px';
+      lanes.appendChild(half);
+    }
+
+    // Click zone for this hour slot
+    if (h < TL_HOUR_END) {
+      const zone = document.createElement('div');
+      zone.className = 'tl-click-zone';
+      zone.style.top  = y + 'px';
+      zone.style.height = pph + 'px';
+      zone.dataset.hour = h;
+      zone.addEventListener('click', e => {
+        if (tlDragState) return;
+        const rect     = zone.getBoundingClientRect();
+        const relY     = e.clientY - rect.top;
+        const clickMin = snapMin(h * 60 + yToMin(relY));
+        addTaskAtTime(clickMin);
+      });
+      lanes.appendChild(zone);
+    }
+  }
+}
+
+function renderTlTasks() {
+  // Remove old task blocks
+  document.getElementById('tlLanes').querySelectorAll('.tl-task-block').forEach(el => el.remove());
+
+  const dayTasks = getEffectiveTasks(tlDate).filter(t => t.time);
+  const pph      = tlPxPerHour();
+  const lanes    = document.getElementById('tlLanes');
+
+  // Collision detection — assign column lanes
+  const cols = [];
+  const positioned = dayTasks.map(t => {
+    const [h,m] = t.time.split(':').map(Number);
+    const startMin = h*60 + m;
+    const durMin   = t.duration || TL_TASK_DURATION_DEFAULT;
+    const endMin   = startMin + durMin;
+    return { t, startMin, endMin, durMin };
+  }).sort((a,b) => a.startMin - b.startMin);
+
+  positioned.forEach(item => {
+    let col = 0;
+    while (cols[col] && cols[col] > item.startMin) col++;
+    item.col   = col;
+    cols[col]  = item.endMin;
+    item.nCols = 1; // will be updated below
+  });
+  // Count max overlapping cols per group
+  positioned.forEach(item => {
+    let maxCol = item.col;
+    positioned.forEach(other => {
+      if (other !== item && other.startMin < item.endMin && other.endMin > item.startMin) {
+        maxCol = Math.max(maxCol, other.col);
+      }
+    });
+    item.nCols = maxCol + 1;
+  });
+
+  positioned.forEach(({ t, startMin, endMin, durMin, col, nCols }) => {
+    const realIdx = tasks.indexOf(t);
+    const block = document.createElement('div');
+    block.className = 'tl-task-block cat-' + t.category + (t.done ? ' done-block' : '');
+    block.dataset.idx = realIdx;
+
+    const topY  = minToY(startMin);
+    const blockH = Math.max(28, (durMin / 60) * pph - 3);
+    const colW   = 1 / nCols;
+    const colPad = 6;
+    const totalW = lanes.offsetWidth - colPad * 2;
+
+    block.style.top    = topY + 'px';
+    block.style.height = blockH + 'px';
+    block.style.left   = (colPad + col * colW * totalW) + 'px';
+    block.style.right  = (colPad + (nCols - col - 1) * colW * totalW) + 'px';
+
+    const icon = t.icon || CAT_ICON[t.category];
+    block.innerHTML = `
+      <div style="display:flex;align-items:center;gap:4px;min-width:0;">
+        <span class="tl-task-icon">${icon}</span>
+        <span class="tl-task-title">${t.text}</span>
+      </div>
+      ${blockH > 40 ? `<div class="tl-task-time">${t.time}${durMin !== TL_TASK_DURATION_DEFAULT ? ' · ' + durMin + 'p' : ''}</div>` : ''}
+      <div class="tl-resize-handle" data-idx="${realIdx}"></div>
+    `;
+
+    // Double-click → open edit modal
+    block.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      closeTimelineModal();
+      setTimeout(() => openEditModal(realIdx), 50);
+    });
+
+    // Drag to reschedule
+    block.addEventListener('mousedown', e => {
+      if (e.target.classList.contains('tl-resize-handle')) return;
+      e.preventDefault();
+      startTlDrag(e, realIdx, 'move', startMin);
+    });
+    block.addEventListener('touchstart', e => {
+      if (e.target.classList.contains('tl-resize-handle')) return;
+      e.preventDefault();
+      startTlDrag(e.touches[0], realIdx, 'move', startMin);
+    }, { passive: false });
+
+    // Resize handle drag
+    block.querySelector('.tl-resize-handle').addEventListener('mousedown', e => {
+      e.stopPropagation(); e.preventDefault();
+      startTlDrag(e, realIdx, 'resize', startMin, durMin);
+    });
+    block.querySelector('.tl-resize-handle').addEventListener('touchstart', e => {
+      e.stopPropagation(); e.preventDefault();
+      startTlDrag(e.touches[0], realIdx, 'resize', startMin, durMin);
+    }, { passive: false });
+
+    lanes.appendChild(block);
+  });
+
+  updateTlNowLine();
+}
+
+function updateTlNowLine() {
+  const nowLine = document.getElementById('tlNowLine');
+  if (tlDate !== toDateStr(today)) { nowLine.style.display = 'none'; return; }
+  const now    = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  const y      = minToY(nowMin);
+  nowLine.style.top     = y + 'px';
+  nowLine.style.display = 'block';
+  // Update time label
+  let dotLabel = nowLine.querySelector('.tl-now-dot-label');
+  if (!dotLabel) {
+    dotLabel = document.createElement('div');
+    dotLabel.className = 'tl-now-dot-label';
+    nowLine.appendChild(dotLabel);
+  }
+  dotLabel.textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+}
+
+// ===== Drag & Drop =====
+function startTlDrag(e, taskIdx, mode, origStartMin, origDurMin) {
+  const lanes   = document.getElementById('tlLanes');
+  const block   = lanes.querySelector(`.tl-task-block[data-idx="${taskIdx}"]`);
+  const lanesRect = lanes.getBoundingClientRect();
+  const startY   = e.clientY;
+  const startMin = origStartMin;
+  const startDur = origDurMin || TL_TASK_DURATION_DEFAULT;
+
+  block.classList.add('dragging');
+
+  // Drop line indicator
+  const dropLine = document.createElement('div');
+  dropLine.className = 'tl-drop-line';
+  dropLine.style.top = minToY(startMin) + 'px';
+  dropLine.dataset.time = minToTimeStr(startMin);
+  lanes.appendChild(dropLine);
+
+  tlDragState = { taskIdx, mode, startY, startMin, startDur, block, dropLine, lanesRect };
+
+  const onMove = ev => {
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    const dy      = clientY - startY;
+    const dMin    = yToMin(dy);
+
+    if (mode === 'move') {
+      const newStart = Math.max(0, Math.min(23*60, snapMin(startMin + dMin)));
+      const newY     = minToY(newStart);
+      dropLine.style.top      = newY + 'px';
+      dropLine.dataset.time   = minToTimeStr(newStart);
+      block.style.top         = newY + 'px';
+    } else {
+      const newDur = Math.max(15, snapMin(startDur + dMin));
+      const newH   = Math.max(28, (newDur / 60) * tlPxPerHour() - 3);
+      block.style.height      = newH + 'px';
+      dropLine.style.top      = minToY(startMin + newDur) + 'px';
+      dropLine.dataset.time   = minToTimeStr(startMin + newDur);
+    }
+  };
+
+  const onUp = ev => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend',  onUp);
+
+    const clientY  = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY;
+    const dy       = clientY - startY;
+    const dMin     = yToMin(dy);
+
+    block.classList.remove('dragging');
+    dropLine.remove();
+
+    const snap2 = snapshotTasks();
+
+    if (mode === 'move') {
+      const newStart = Math.max(0, Math.min(23*60, snapMin(startMin + dMin)));
+      if (newStart !== startMin) {
+        const newTimeStr = minToTimeStr(newStart);
+        tasks[taskIdx].time = newTimeStr;
+        save();
+        pushHistory('reschedule', tasks[taskIdx].text, snap2, { oldTime: minToTimeStr(startMin), newTime: newTimeStr });
+        showTlSnapToast('📍 Đã dời → ' + newTimeStr);
+        renderCountdownWidget();
+      }
+    } else {
+      const newDur = Math.max(15, snapMin(startDur + dMin));
+      if (newDur !== startDur) {
+        tasks[taskIdx].duration = newDur;
+        save();
+        showTlSnapToast('↔ Thời lượng: ' + newDur + ' phút');
+      }
+    }
+
+    tlDragState = null;
+    renderTlTasks();
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend',  onUp);
+}
+
+function showTlSnapToast(msg) {
+  const toast = document.getElementById('tlSnapToast');
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 2000);
+}
+
+function addTaskAtTime(startMin) {
+  const timeStr = minToTimeStr(startMin);
+  // Pre-fill and open add modal with this time + date
+  resetAddForm(tlDate);
+  document.getElementById('taskDate').value = tlDate;
+  document.getElementById('taskTime').value = timeStr;
+  closeTimelineModal();
+  document.getElementById('taskModal').classList.add('open');
+  setTimeout(() => document.getElementById('taskInput').focus(), 200);
+}
+
+// Event listeners
+document.getElementById('openTimelineBtn').addEventListener('click', openTimelineModal);
+document.getElementById('timelineModalClose').addEventListener('click', closeTimelineModal);
+document.getElementById('timelineModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('timelineModal')) closeTimelineModal();
+});
+
+document.getElementById('tlPrevDay').addEventListener('click', () => {
+  const d = new Date(tlDate + 'T00:00:00'); d.setDate(d.getDate()-1);
+  tlDate = toDateStr(d); renderTimeline();
+});
+document.getElementById('tlNextDay').addEventListener('click', () => {
+  const d = new Date(tlDate + 'T00:00:00'); d.setDate(d.getDate()+1);
+  tlDate = toDateStr(d); renderTimeline();
+});
+
+document.getElementById('tlZoomIn').addEventListener('click', () => {
+  const i = TL_ZOOMS.indexOf(tlZoom);
+  if (i < TL_ZOOMS.length-1) { tlZoom = TL_ZOOMS[i+1]; renderTimeline(); }
+});
+document.getElementById('tlZoomOut').addEventListener('click', () => {
+  const i = TL_ZOOMS.indexOf(tlZoom);
+  if (i > 0) { tlZoom = TL_ZOOMS[i-1]; renderTimeline(); }
+});
+
+// Re-render timeline when tasks change (if open)
+function refreshTimelineIfOpen() {
+  if (document.getElementById('timelineModal').classList.contains('open')) renderTlTasks();
 }
 
 // ===== Init =====

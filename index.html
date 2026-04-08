@@ -10,9 +10,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<link rel="icon" type="image/png" sizes="32x32" href="img/Ai.png">
-<link rel="icon" type="image/png" sizes="16x16" href="img/Ai.png">
-<link rel="apple-touch-icon" sizes="180x180" href="img/Ai.png">
 </head>
 <body>
 
@@ -27,6 +24,7 @@
       <button class="btn-icon" id="openStatsBtn" title="Thống kê">📊</button>
       <button class="btn-icon" id="openChatBtn" title="Trợ lý">💬</button>
       <button class="btn-icon" id="openGameBtn" title="Hồ sơ & Game">🎮</button>
+      <button class="btn-icon" id="openTimelineBtn" title="Timeline">⏱</button>
       <button class="btn-primary" id="openModalBtn">+ Thêm nhiệm vụ</button>
     </div>
   </div>
@@ -79,10 +77,24 @@
         <label class="form-label">Tên nhiệm vụ</label>
         <input class="form-input" type="text" id="taskInput" placeholder="Nhập nội dung...">
       </div>
+      <button class="ai-subtask-btn" id="aiSubtaskBtn" title="AI sinh sub-task">✨</button>
     </div>
 
     <!-- Emoji picker panel -->
     <div class="emoji-picker" id="emojiPicker" style="display:none;"></div>
+
+    <!-- AI Sub-task panel -->
+    <div class="subtask-panel" id="subtaskPanel" style="display:none;">
+      <div class="subtask-panel-header">
+        <span class="subtask-panel-title">✨ Sub-task gợi ý</span>
+        <button class="subtask-regen-btn" id="subtaskRegenBtn">↻ Sinh lại</button>
+      </div>
+      <div class="subtask-loading" id="subtaskLoading" style="display:none;">
+        <span class="subtask-spinner"></span> Đang phân tích nhiệm vụ...
+      </div>
+      <div id="subtaskList"></div>
+      <button class="subtask-add-manual-btn" id="subtaskAddManualBtn">+ Thêm sub-task thủ công</button>
+    </div>
 
     <div class="form-row">
       <div>
@@ -151,10 +163,24 @@
         <label class="form-label">Tên nhiệm vụ</label>
         <input class="form-input" type="text" id="editTaskInput" placeholder="Nhập nội dung...">
       </div>
+      <button class="ai-subtask-btn" id="editAiSubtaskBtn" title="AI sinh sub-task">✨</button>
     </div>
 
     <!-- Emoji picker panel -->
     <div class="emoji-picker" id="editEmojiPicker" style="display:none;"></div>
+
+    <!-- AI Sub-task panel -->
+    <div class="subtask-panel" id="editSubtaskPanel" style="display:none;">
+      <div class="subtask-panel-header">
+        <span class="subtask-panel-title">✨ Sub-task</span>
+        <button class="subtask-regen-btn" id="editSubtaskRegenBtn">↻ Sinh lại</button>
+      </div>
+      <div class="subtask-loading" id="editSubtaskLoading" style="display:none;">
+        <span class="subtask-spinner"></span> Đang phân tích nhiệm vụ...
+      </div>
+      <div id="editSubtaskList"></div>
+      <button class="subtask-add-manual-btn" id="editSubtaskAddManualBtn">+ Thêm sub-task thủ công</button>
+    </div>
 
     <div class="form-row">
       <div>
@@ -329,6 +355,45 @@
     <div id="gtab-achievements" class="stats-panel">
       <div id="gmAchGrid" class="gm-ach-grid"></div>
     </div>
+  </div>
+</div>
+
+<!-- Modal Timeline -->
+<div class="modal-overlay" id="timelineModal">
+  <div class="modal-box modal-box--wide modal-box--timeline">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="modal-title">⏱ Timeline</div>
+        <div class="tl-date-nav">
+          <button class="nav-btn" id="tlPrevDay">&#8592;</button>
+          <div class="tl-date-label" id="tlDateLabel"></div>
+          <button class="nav-btn" id="tlNextDay">&#8594;</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="tl-zoom-btn" id="tlZoomOut" title="Thu nhỏ">−</button>
+        <span class="tl-zoom-label" id="tlZoomLabel">1×</span>
+        <button class="tl-zoom-btn" id="tlZoomIn" title="Phóng to">+</button>
+        <button class="modal-close" id="timelineModalClose">✕</button>
+      </div>
+    </div>
+
+    <div class="tl-hint">💡 Kéo task để đổi giờ · Nhấn đúp task để sửa · Nhấn vào giờ trống để thêm</div>
+
+    <div class="tl-scroll-wrap" id="tlScrollWrap">
+      <div class="tl-inner" id="tlInner">
+        <!-- Hour labels column -->
+        <div class="tl-hours-col" id="tlHoursCol"></div>
+        <!-- Task lanes -->
+        <div class="tl-lanes" id="tlLanes">
+          <div class="tl-now-line" id="tlNowLine" style="display:none;"></div>
+          <!-- task blocks injected here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Snap indicator -->
+    <div class="tl-snap-toast" id="tlSnapToast" style="display:none;"></div>
   </div>
 </div>
 
