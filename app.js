@@ -126,20 +126,21 @@ function renderCalendar() {
     numEl.textContent = d;
     el.appendChild(numEl);
     if (dayTasks.length > 0) {
-      const dotsRow = document.createElement('div');
-      dotsRow.className = 'dots-row';
-      dayTasks.slice(0, 5).forEach(t => {
-        const dot = document.createElement('div');
-        dot.className = 'dot ' + t.category + (t.done ? ' done' : '');
-        dotsRow.appendChild(dot);
+      const emojiRow = document.createElement('div');
+      emojiRow.className = 'cal-emoji-row';
+      dayTasks.slice(0, 6).forEach(t => {
+        const span = document.createElement('span');
+        span.className = 'cal-emoji' + (t.done ? ' done' : '');
+        span.textContent = t.icon || CAT_ICON[t.category];
+        emojiRow.appendChild(span);
       });
-      if (dayTasks.length > 5) {
+      if (dayTasks.length > 6) {
         const more = document.createElement('div');
         more.className = 'more-badge';
-        more.textContent = '+' + (dayTasks.length - 5);
-        dotsRow.appendChild(more);
+        more.textContent = '+' + (dayTasks.length - 6);
+        emojiRow.appendChild(more);
       }
-      el.appendChild(dotsRow);
+      el.appendChild(emojiRow);
     }
     el.addEventListener('click', () => openDayModal(dateStr));
     grid.appendChild(el);
@@ -173,6 +174,7 @@ function renderDayTaskList() {
     item.className = 'task-list-item' + (t.done ? ' done' : '');
     item.innerHTML = `
       <div class="task-check ${t.done ? 'checked' : ''}" data-idx="${realIdx}">${t.done ? '✓' : ''}</div>
+      ${t.image ? `<img class="task-thumb" src="${t.image}" alt="" data-src="${t.image}">` : `<span style="font-size:20px;flex-shrink:0;">${t.icon || CAT_ICON[t.category]}</span>`}
       <div class="task-text">${t.text}</div>
       <div class="task-meta">
         ${t.time ? `<span class="task-time">${t.time}</span>` : ''}
@@ -180,6 +182,13 @@ function renderDayTaskList() {
       </div>
       <button class="task-edit-btn" data-idx="${realIdx}" title="Sửa">✎</button>
     `;
+    // Thumbnail lightbox
+    if (t.image) {
+      item.querySelector('.task-thumb').addEventListener('click', e => {
+        e.stopPropagation();
+        openLightbox(e.currentTarget.dataset.src);
+      });
+    }
     item.querySelector('.task-check').addEventListener('click', e => {
       e.stopPropagation();
       const i = parseInt(e.currentTarget.dataset.idx);
@@ -209,6 +218,17 @@ function resetAddForm(dateStr) {
   selectedCat = 'work';
   document.querySelectorAll('#taskModal .cat-opt').forEach(o => o.classList.remove('selected'));
   document.querySelector('#taskModal .cat-opt[data-cat="work"]').classList.add('selected');
+  // Reset icon
+  selectedIcon = '💼';
+  document.getElementById('iconPickBtn').textContent = '💼';
+  document.getElementById('emojiPicker').style.display = 'none';
+  document.getElementById('emojiPicker').querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+  // Reset image
+  selectedImageB64 = null;
+  document.getElementById('taskImageInput').value = '';
+  document.getElementById('imgPreview').style.display = 'none';
+  document.getElementById('imgUploadPlaceholder').style.display = 'flex';
+  document.getElementById('imgRemoveBtn').style.display = 'none';
 }
 function openModal() {
   resetAddForm(toDateStr(today));
@@ -229,7 +249,7 @@ function addTask() {
   const date = document.getElementById('taskDate').value;
   if (!text || !date) { document.getElementById('taskInput').focus(); return; }
   const snap = snapshotTasks();
-  tasks.push({ id: Date.now(), text, date, time: document.getElementById('taskTime').value, category: selectedCat, repeat: repeatOn, done: false });
+  tasks.push({ id: Date.now(), text, date, time: document.getElementById('taskTime').value, category: selectedCat, repeat: repeatOn, done: false, icon: selectedIcon, image: selectedImageB64 || null });
   save();
   pushHistory('add', text, snap);
   closeAddModal();
@@ -254,6 +274,26 @@ function openEditModal(idx) {
     o.classList.toggle('selected', o.dataset.cat === editCat);
   });
   document.getElementById('editRepeatToggle').classList.toggle('on', editRepeatOn);
+  // Restore icon
+  selectedEditIcon = t.icon || CAT_ICON[t.category];
+  document.getElementById('editIconPickBtn').textContent = selectedEditIcon;
+  document.getElementById('editEmojiPicker').style.display = 'none';
+  // Restore image
+  selectedEditImageB64 = t.image || null;
+  const editPreview = document.getElementById('editImgPreview');
+  const editPlaceholder = document.getElementById('editImgUploadPlaceholder');
+  const editRemoveBtn = document.getElementById('editImgRemoveBtn');
+  if (t.image) {
+    editPreview.src = t.image;
+    editPreview.style.display = 'block';
+    editPlaceholder.style.display = 'none';
+    editRemoveBtn.style.display = 'inline-block';
+  } else {
+    editPreview.src = '';
+    editPreview.style.display = 'none';
+    editPlaceholder.style.display = 'flex';
+    editRemoveBtn.style.display = 'none';
+  }
   document.getElementById('editModal').classList.add('open');
   setTimeout(() => document.getElementById('editTaskInput').focus(), 200);
 }
@@ -267,7 +307,7 @@ function saveEdit() {
   const date = document.getElementById('editTaskDate').value;
   if (!text || !date) { document.getElementById('editTaskInput').focus(); return; }
   const snapEdit = snapshotTasks();
-  tasks[editingIdx] = { ...tasks[editingIdx], text, date, time: document.getElementById('editTaskTime').value, category: editCat, repeat: editRepeatOn };
+  tasks[editingIdx] = { ...tasks[editingIdx], text, date, time: document.getElementById('editTaskTime').value, category: editCat, repeat: editRepeatOn, icon: selectedEditIcon, image: selectedEditImageB64 !== undefined ? selectedEditImageB64 : tasks[editingIdx].image };
   save();
   pushHistory('edit', text, snapEdit);
   closeEditModal();
@@ -1128,6 +1168,138 @@ function applyTheme(themeId) {
 
 // Apply saved theme on load
 applyTheme(game.activeTheme || 'default');
+
+// ===== Icon & Image System =====
+const EMOJI_SETS = [
+  { label: 'Công việc', emojis: ['💼','📋','📊','📝','💻','📞','🤝','📌','🎯','📈','🖥','✉️','📅','🏢','⚙️','🔧'] },
+  { label: 'Sức khỏe', emojis: ['💪','🏃','🧘','🥗','💊','🏋️','🚴','🧠','❤️','🛌','🥤','🏊','🤸','🍎','🧴','🩺'] },
+  { label: 'Chi tiêu',  emojis: ['💰','🛒','💳','🏦','🧾','💵','🎁','🛍','🏠','🚗','✈️','🍽','📱','💡','🔑','💎'] },
+  { label: 'Học tập',  emojis: ['📚','✏️','🎓','🔬','📐','🗂','📖','🧮','💡','🎨','🎵','🎭','📷','🌍','🔭','🧩'] },
+  { label: 'Vui vẻ',   emojis: ['🎉','🎮','🎬','🎤','⚽','🏖','🌟','🍕','🎂','🏆','🎸','🌈','🐾','🌺','🦋','🎪'] },
+];
+
+let selectedIcon     = '💼';
+let selectedEditIcon = '💼';
+let selectedImageB64 = null;
+let selectedEditImageB64 = null;
+
+// Build picker into a container element
+function buildEmojiPicker(containerId, btnId, onSelect) {
+  const container = document.getElementById(containerId);
+  const btn       = document.getElementById(btnId);
+  container.innerHTML = '';
+  EMOJI_SETS.forEach(set => {
+    const lbl = document.createElement('div');
+    lbl.className = 'emoji-section-label';
+    lbl.textContent = set.label;
+    container.appendChild(lbl);
+    const row = document.createElement('div');
+    row.className = 'emoji-row';
+    set.emojis.forEach(e => {
+      const eb = document.createElement('button');
+      eb.className = 'emoji-btn';
+      eb.textContent = e;
+      eb.type = 'button';
+      eb.addEventListener('click', ev => {
+        ev.stopPropagation();
+        container.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+        eb.classList.add('selected');
+        btn.textContent = e;
+        onSelect(e);
+        container.style.display = 'none';
+      });
+      row.appendChild(eb);
+    });
+    container.appendChild(row);
+  });
+}
+
+function toggleEmojiPicker(pickerId, btnId) {
+  const p = document.getElementById(pickerId);
+  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+}
+
+// Setup add modal icon picker
+buildEmojiPicker('emojiPicker', 'iconPickBtn', e => { selectedIcon = e; });
+document.getElementById('iconPickBtn').addEventListener('click', e => {
+  e.stopPropagation(); toggleEmojiPicker('emojiPicker', 'iconPickBtn');
+});
+
+// Setup edit modal icon picker
+buildEmojiPicker('editEmojiPicker', 'editIconPickBtn', e => { selectedEditIcon = e; });
+document.getElementById('editIconPickBtn').addEventListener('click', e => {
+  e.stopPropagation(); toggleEmojiPicker('editEmojiPicker', 'editIconPickBtn');
+});
+
+// Close pickers when clicking outside
+document.addEventListener('click', () => {
+  document.getElementById('emojiPicker').style.display     = 'none';
+  document.getElementById('editEmojiPicker').style.display = 'none';
+});
+
+// Image upload — Add modal
+function setupImageUpload(inputId, previewId, placeholderId, removeBtnId, onLoad, onRemove) {
+  const input      = document.getElementById(inputId);
+  const preview    = document.getElementById(previewId);
+  const placeholder= document.getElementById(placeholderId);
+  const removeBtn  = document.getElementById(removeBtnId);
+
+  input.addEventListener('change', () => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert('Ảnh tối đa 2MB nhé!'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      // Resize to max 400px wide before storing
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 400, maxH = 300;
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const b64 = canvas.toDataURL('image/jpeg', 0.7);
+        preview.src = b64;
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+        removeBtn.style.display = 'inline-block';
+        onLoad(b64);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  removeBtn.addEventListener('click', e => {
+    e.preventDefault();
+    input.value = '';
+    preview.src = '';
+    preview.style.display = 'none';
+    placeholder.style.display = 'flex';
+    removeBtn.style.display = 'none';
+    onRemove();
+  });
+}
+
+setupImageUpload('taskImageInput','imgPreview','imgUploadPlaceholder','imgRemoveBtn',
+  b64 => { selectedImageB64 = b64; },
+  ()  => { selectedImageB64 = null; }
+);
+setupImageUpload('editTaskImageInput','editImgPreview','editImgUploadPlaceholder','editImgRemoveBtn',
+  b64 => { selectedEditImageB64 = b64; },
+  ()  => { selectedEditImageB64 = null; }
+);
+
+// Image lightbox
+function openLightbox(src) {
+  const lb = document.createElement('div');
+  lb.id = 'imgLightbox';
+  lb.innerHTML = `<img src="${src}" alt="Task image">`;
+  lb.addEventListener('click', () => lb.remove());
+  document.body.appendChild(lb);
+}
 
 // ===== Undo / Action History =====
 const MAX_HISTORY = 30;

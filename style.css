@@ -1090,3 +1090,142 @@ body {
 .gm-ach-desc { font-size: 11px; color: var(--text3); }
 .gm-ach-tile:not(.locked) .gm-ach-name { color: #085041; }
 .gm-ach-tile:not(.locked) .gm-ach-desc { color: #0F6E56; }
+
+/* ===== Icon Picker ===== */
+.icon-pick-btn {
+  width: 44px; height: 44px;
+  border-radius: var(--rm);
+  border: 1.5px solid var(--border2);
+  background: var(--surface2);
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  margin-top: 18px;
+}
+.icon-pick-btn:hover { border-color: var(--accent); background: var(--accent-light); transform: scale(1.05); }
+
+.emoji-picker {
+  background: var(--surface2);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--r);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.emoji-picker::-webkit-scrollbar { width: 4px; }
+.emoji-picker::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+.emoji-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.emoji-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.emoji-btn {
+  width: 34px; height: 34px;
+  border: 0.5px solid transparent;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.1s;
+}
+.emoji-btn:hover { border-color: var(--accent); background: var(--accent-light); transform: scale(1.1); }
+.emoji-btn.selected { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 2px var(--accent-light); }
+
+/* ===== Image Upload ===== */
+.img-upload-label {
+  display: block;
+  cursor: pointer;
+}
+.img-upload-placeholder {
+  border: 1.5px dashed var(--border2);
+  border-radius: var(--rm);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text3);
+  transition: all 0.15s;
+}
+.img-upload-placeholder:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+.img-preview {
+  width: 100%;
+  max-height: 140px;
+  object-fit: cover;
+  border-radius: var(--rm);
+  border: 0.5px solid var(--border2);
+  display: block;
+}
+.img-remove-btn {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--coral);
+  background: var(--coral-light);
+  border: 0.5px solid var(--coral);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.12s;
+}
+.img-remove-btn:hover { background: var(--coral); color: white; }
+
+/* ===== Task item with image thumbnail ===== */
+.task-thumb {
+  width: 36px; height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 0.5px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.task-thumb:hover { transform: scale(1.08); }
+
+/* ===== Calendar emoji dots ===== */
+.cal-emoji-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin-top: 2px;
+}
+.cal-emoji {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+.cal-emoji.done { opacity: 0.35; }
+
+/* ===== Image lightbox ===== */
+#imgLightbox {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+#imgLightbox img {
+  max-width: 90vw;
+  max-height: 85vh;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}

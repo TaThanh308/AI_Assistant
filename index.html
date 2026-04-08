@@ -71,10 +71,19 @@
       <div class="modal-title">Thêm nhiệm vụ mới</div>
       <button class="modal-close" id="modalClose">✕</button>
     </div>
-    <div>
-      <label class="form-label">Tên nhiệm vụ</label>
-      <input class="form-input" type="text" id="taskInput" placeholder="Nhập nội dung...">
+
+    <!-- Icon + Task name row -->
+    <div style="display:flex;gap:8px;align-items:flex-start;">
+      <button class="icon-pick-btn" id="iconPickBtn" title="Chọn icon">💼</button>
+      <div style="flex:1;">
+        <label class="form-label">Tên nhiệm vụ</label>
+        <input class="form-input" type="text" id="taskInput" placeholder="Nhập nội dung...">
+      </div>
     </div>
+
+    <!-- Emoji picker panel -->
+    <div class="emoji-picker" id="emojiPicker" style="display:none;"></div>
+
     <div class="form-row">
       <div>
         <label class="form-label">Ngày</label>
@@ -93,6 +102,20 @@
         <div class="cat-opt finance" data-cat="finance">Chi tiêu</div>
       </div>
     </div>
+
+    <!-- Image upload -->
+    <div>
+      <label class="form-label">Hình ảnh đính kèm</label>
+      <label class="img-upload-label" id="imgUploadLabel">
+        <input type="file" id="taskImageInput" accept="image/*" style="display:none;">
+        <div class="img-upload-placeholder" id="imgUploadPlaceholder">
+          <span>📎</span><span>Chọn ảnh (tùy chọn)</span>
+        </div>
+        <img id="imgPreview" class="img-preview" style="display:none;">
+      </label>
+      <button class="img-remove-btn" id="imgRemoveBtn" style="display:none;">✕ Xóa ảnh</button>
+    </div>
+
     <div class="repeat-row">
       <div class="toggle" id="repeatToggle"></div>
       <span>Lặp lại hàng ngày</span>
@@ -120,10 +143,19 @@
       <div class="modal-title">Sửa nhiệm vụ</div>
       <button class="modal-close" id="editModalClose">✕</button>
     </div>
-    <div>
-      <label class="form-label">Tên nhiệm vụ</label>
-      <input class="form-input" type="text" id="editTaskInput" placeholder="Nhập nội dung...">
+
+    <!-- Icon + Task name row -->
+    <div style="display:flex;gap:8px;align-items:flex-start;">
+      <button class="icon-pick-btn" id="editIconPickBtn" title="Chọn icon">💼</button>
+      <div style="flex:1;">
+        <label class="form-label">Tên nhiệm vụ</label>
+        <input class="form-input" type="text" id="editTaskInput" placeholder="Nhập nội dung...">
+      </div>
     </div>
+
+    <!-- Emoji picker panel -->
+    <div class="emoji-picker" id="editEmojiPicker" style="display:none;"></div>
+
     <div class="form-row">
       <div>
         <label class="form-label">Ngày</label>
@@ -142,6 +174,20 @@
         <div class="cat-opt finance" data-cat="finance">Chi tiêu</div>
       </div>
     </div>
+
+    <!-- Image upload -->
+    <div>
+      <label class="form-label">Hình ảnh đính kèm</label>
+      <label class="img-upload-label" id="editImgUploadLabel">
+        <input type="file" id="editTaskImageInput" accept="image/*" style="display:none;">
+        <div class="img-upload-placeholder" id="editImgUploadPlaceholder">
+          <span>📎</span><span>Chọn ảnh (tùy chọn)</span>
+        </div>
+        <img id="editImgPreview" class="img-preview" style="display:none;">
+      </label>
+      <button class="img-remove-btn" id="editImgRemoveBtn" style="display:none;">✕ Xóa ảnh</button>
+    </div>
+
     <div class="repeat-row">
       <div class="toggle" id="editRepeatToggle"></div>
       <span>Lặp lại hàng ngày</span>
